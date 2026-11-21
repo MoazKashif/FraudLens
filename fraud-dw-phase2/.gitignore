@@ -1,0 +1,6 @@
+# source data is large and not committed
+data/*.csv
+__pycache__/
+*.pyc
+.venv/
+.env

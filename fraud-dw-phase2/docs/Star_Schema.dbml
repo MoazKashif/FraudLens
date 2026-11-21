@@ -1,0 +1,118 @@
+// Paste into https://dbdiagram.io
+Project fraud_dw { database_type: 'PostgreSQL' }
+
+Table dim_date {
+  date_key INTEGER [pk]
+  full_date DATE [not null]
+  day_of_month SMALLINT [not null]
+  day_name VARCHAR(9) [not null]
+  week_of_year SMALLINT [not null]
+  month_number SMALLINT [not null]
+  month_name VARCHAR(9) [not null]
+  quarter SMALLINT [not null]
+  year SMALLINT [not null]
+  is_weekend BOOLEAN [not null]
+  Note: 'Calendar dimension at day grain, built from the transaction timestamps (all of 2022).'
+}
+
+Table dim_time {
+  time_key SMALLINT [pk]
+  hour_of_day SMALLINT [not null]
+  hour_label VARCHAR(11) [not null]
+  day_part VARCHAR(10) [not null]
+  Note: 'Time-of-day dimension at hour grain, so time-of-day questions do not need a timestamp scan.'
+}
+
+Table dim_customer {
+  customer_key INTEGER [pk]
+  customer_email VARCHAR(100) [not null]
+  customer_name VARCHAR(100) [not null]
+  device_type VARCHAR(10) [not null]
+  card_expiry_month SMALLINT [not null]
+  card_expiry_year SMALLINT [not null]
+  Note: 'Customers from user.csv, with their device and card expiry. One row per distinct customer email.'
+}
+
+Table dim_merchant {
+  merchant_key INTEGER [pk]
+  merchant_email VARCHAR(100) [not null]
+  merchant_name VARCHAR(100) [not null]
+  Note: 'Merchants from user.csv. One row per distinct merchant email.'
+}
+
+Table dim_transactiontype {
+  type_key SMALLINT [pk]
+  type_name VARCHAR(12) [not null]
+  money_direction VARCHAR(10) [not null]
+  location_region VARCHAR(15) [not null]
+  ip_prefix VARCHAR(10) [not null]
+  Note: 'Transaction context from transaction_type.csv: the type plus the region and IP prefix it came from.'
+}
+
+Table dim_behaviorrisk {
+  behavior_key SMALLINT [pk]
+  purchase_pattern VARCHAR(12) [not null]
+  anomaly_level VARCHAR(14) [not null]
+  login_frequency_band VARCHAR(8) [not null]
+  session_duration_band VARCHAR(8) [not null]
+  Note: 'Mini-dimension of banded behaviour and risk attributes from behavior_risk.csv. The exact numbers stay in the fact as measures.'
+}
+
+Table fact_transactions {
+  transaction_key BIGINT [pk, increment]
+  date_key INTEGER [not null]
+  time_key SMALLINT [not null]
+  customer_key INTEGER [not null]
+  merchant_key INTEGER [not null]
+  type_key SMALLINT [not null]
+  behavior_key SMALLINT [not null]
+  sender_account VARCHAR(20) [not null]
+  receiver_account VARCHAR(20) [not null]
+  txn_timestamp TIMESTAMP [not null]
+  txn_count SMALLINT [not null]
+  amount decimal(12,2) [not null]
+  is_fraud SMALLINT [not null]
+  fraud_amount decimal(12,2) [not null]
+  risk_score decimal(5,2) [not null]
+  login_frequency SMALLINT [not null]
+  session_duration decimal(10,2) [not null]
+  etl_batch_id INTEGER [not null]
+  load_timestamp TIMESTAMP [not null]
+  Note: 'Core transaction fact. Transaction-grain, atomic.'
+}
+
+Table fact_daily_fraud_snapshot {
+  date_key INTEGER [not null]
+  type_key SMALLINT [not null]
+  txn_count INTEGER [not null]
+  fraud_txn_count INTEGER [not null]
+  high_risk_txn_count INTEGER [not null]
+  total_amount decimal(14,2) [not null]
+  fraud_amount decimal(14,2) [not null]
+  fraud_rate decimal(6,4) [not null]
+  avg_risk_score decimal(5,2) [not null]
+  indexes {
+    (date_key, type_key) [pk]
+  }
+  Note: 'Periodic snapshot fact. Daily fraud summary per transaction context, built by the ETL from Fact_Transactions for fast trend dashboards.'
+}
+
+Table fact_customer_merchant {
+  customer_key INTEGER [not null]
+  merchant_key INTEGER [not null]
+  indexes {
+    (customer_key, merchant_key) [pk]
+  }
+  Note: 'Factless fact recording which customer is linked to which merchant (one record per row of user.csv). No measures.'
+}
+
+Ref: fact_transactions.date_key > dim_date.date_key
+Ref: fact_transactions.time_key > dim_time.time_key
+Ref: fact_transactions.customer_key > dim_customer.customer_key
+Ref: fact_transactions.merchant_key > dim_merchant.merchant_key
+Ref: fact_transactions.type_key > dim_transactiontype.type_key
+Ref: fact_transactions.behavior_key > dim_behaviorrisk.behavior_key
+Ref: fact_daily_fraud_snapshot.date_key > dim_date.date_key
+Ref: fact_daily_fraud_snapshot.type_key > dim_transactiontype.type_key
+Ref: fact_customer_merchant.customer_key > dim_customer.customer_key
+Ref: fact_customer_merchant.merchant_key > dim_merchant.merchant_key
