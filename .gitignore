@@ -1,0 +1,22 @@
+# OS / editor files
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Python / notebooks
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Environments & secrets
+.env
+.venv/
+venv/
+*.pem
+
+# Logs & temporary files
+*.log
+*.bak
+~$*
